@@ -11,7 +11,7 @@
 #include <vector>
 #include <map>
 #include <queue>
-
+#include<cmath>
 namespace utility {
 	
 	struct point2D {
@@ -24,7 +24,39 @@ namespace utility {
 		};
 
 		~point2D() {};
+		double distance() {
+			return sqrt(x*x+y*y);
+		}
 
+		double angle() {
+			double pi = 3.141592653;
+			return y >= 0 ? acos(x / sqrt(x*x + y * y)) : 2 * pi - acos(x / sqrt(x*x + y * y));
+		};
+
+		point2D operator+(const point2D& b) {
+			point2D temp;
+			temp.x = this->x + b.x;
+			temp.y = this->y + b.y;
+			return temp;
+		}
+		point2D operator-(const point2D& b) {
+			point2D temp;
+			temp.x = this->x - b.x;
+			temp.y = this->y - b.y;
+			return temp;
+		}
+		point2D operator-() {
+			this->x = -this->x;
+			this->y = -this->y;
+			return *this;
+		}
+		point2D operator*(double T) {
+			point2D temp;
+			temp.x = this->x*T;
+			temp.y = this->y*T;
+			return temp;
+		}
+		
 		double x;
 		double y;
 	};
@@ -49,7 +81,10 @@ namespace utility {
 
 		};
 		State  state;
-
+		double search_r;
+		double Vel_limite[2];
+		double Acc_limite_x[2];
+		double Acc_limite_y[2];
 	};
 
 	class particle
@@ -84,7 +119,7 @@ namespace utility {
 	public:
 		grid() {};
 		~grid() {};
-		std::vector<int> search_count;
+		std::vector<float> search_time;
 		bool occupy;
 	};
 
@@ -98,24 +133,23 @@ namespace utility {
 
 		int id;
 		State  state;
+		double Vel_limite[2];
+		double Acc_limite_x[2];
+		double Acc_limite_y[2];
 
+		double h;
 		double search_r;
-
-		double particle_r;
 		int coverd_area_cnt;
-
+		
 		State  Gbest_state;
-		//point2D Gbest_position;
-		State  last_Gbest_state;
 		State  traj_Point;
 		double Gbest_fitness;
 
-		std::queue<std::vector<double>> path_;//states
+		std::queue<State> path_;//states
 		std::vector<particle*> swarm;
-		std::vector<std::pair<point2D, int>> target_position;//
+		std::vector<std::pair<State, float>> target_state;//
 		std::map<int, int> Tj;//第一项被跟踪的目标ID，第二项该目标是否被更好的无人机追踪，0,1
 		int track_target_num;
-		bool isConvergenced;//
 		std::vector<State> prev_poses;
 
 		void updatePrevPoses() {
@@ -189,6 +223,14 @@ namespace utility {
 			}
 		};
 	};
+
+	class Obstacle {
+	public:
+		Obstacle() {};
+		~Obstacle() {};
+		std::vector<point2D> point_lists;
+	};
+
 }
 
 

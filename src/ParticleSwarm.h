@@ -6,6 +6,7 @@
 #include<ctime>
 #include<cstdlib>
 #include<set>
+#include<time.h>
 
 #include"utility.h"
 #include"dubins.h"
@@ -23,20 +24,26 @@ public:
 	void spreadParticles(utility::UAV * uav);
 	void updateParticleStates(utility::UAV * uav);
 	void updateUAVStatesInDubinsState(utility::UAV * uav);
+	void updateArtificalPotentialFieldStateImpl(utility::UAV * uav, utility::State& goal, utility::State&next);
+	utility::point2D computeRepulsion(utility::point2D& start, utility::point2D& obstacle);
+	utility::point2D computeAttraction(utility::point2D& start, utility::point2D& goal);
 	void updateTargetStates();
 	void updateUAVStates();
 	void informationShare();
 	void updateMission();
-	double dubinsDistance(utility::State& state1, utility::State& state2);
+	double dubinsDistance(utility::State& state1, utility::State& state2, double min_R);
 	bool isInBound(utility::State& state);
 	bool isInRader(utility::State& state);
+	bool isInObstacle(utility::State& state);
 	void updateSubMap(utility::UAV * uav);
 	double sigmod(double x);
+	double computeAngle(utility::State& start, utility::State& goal);
+	utility::Obstacle rectangle;
 private:
 	vector<vector<utility::grid*>> global_map;
 	vector<vector<utility::grid*>> sparse_map;
 	vector<utility::TARGET*> target;
-	vector<utility::UAV*> uav;
+	vector<utility::UAV*> uav_;
 	vector<utility::radar*> radar_;
 
 	//output
@@ -49,5 +56,6 @@ private:
 	vector<vector<double>> target_state;
 	vector<bool> tracked;
 	HybridAStar::DubinsPath* path;
+	int cunt = 0;
 };
 
