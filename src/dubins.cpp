@@ -74,7 +74,7 @@ namespace HybridAStar {
     outputs[2]  = q;
 
 	/**
-	* Floating point modulus suitable for rings
+	* doubleing point modulus suitable for rings
 	*
 	* fmod doesn't behave correctly for angular quantities, this function does
 	*/

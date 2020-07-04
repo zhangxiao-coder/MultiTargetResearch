@@ -147,7 +147,7 @@ namespace utility {
 
 		std::queue<State> path_;//states
 		std::vector<particle*> swarm;
-		std::vector<std::pair<State, float>> target_state;//
+		std::vector<std::pair<State, int>> target_state;//
 		std::map<int, int> Tj;//第一项被跟踪的目标ID，第二项该目标是否被更好的无人机追踪，0,1
 		int track_target_num;
 		std::vector<State> prev_poses;
