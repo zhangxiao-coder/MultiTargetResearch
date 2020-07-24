@@ -21,9 +21,9 @@ using namespace std;
 
 
 //target
- const int slow_target_num = 1;
- const int middel_target_num = 1;
- const int fast_target_num = 1;
+ const int slow_target_num = 3;
+ const int middel_target_num = 3;
+ const int fast_target_num = 3;
  const int target_num = slow_target_num + middel_target_num + fast_target_num;
 
 //uav
@@ -41,7 +41,7 @@ using namespace std;
  const double tao = 1;
  const double w1 = 1;
  const double w2 = 1;
- const double w3 = 0.01;
+ const double w3 = 0.1;
  const double weight = 1;
  const double c1 = 1;
  const double c2 = 10;

@@ -26,7 +26,7 @@ public:
 	void updateUAVStatesInDubinsState(utility::UAV * uav);
 	void updateArtificalPotentialFieldStateImpl(utility::UAV * uav, utility::State& goal, utility::State&next);
 	utility::point2D computeRepulsion(utility::point2D& start, utility::point2D& obstacle);
-	double computeEnage(utility::point2D& start, utility::point2D& obstacle,double zero_dist);
+	double computeEnage(utility::State& start, utility::point2D& obstacle,double zero_dist);
 	double computeAttEnage(utility::State& start, utility::State& end, double zero_dist);
 	utility::point2D computeAttraction(utility::point2D& start, utility::point2D& goal);
 	void updateTargetStates();

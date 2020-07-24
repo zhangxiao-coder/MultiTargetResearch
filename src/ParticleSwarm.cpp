@@ -80,7 +80,7 @@ bool ParticleSwarm::isInObstacle(utility::State& state) {
 
 bool ParticleSwarm::isInRader(utility::State& state) {
 	for (int i = 0; i < radar_.size(); i++) {
-		if (utility::dist(state.position, radar_[i]->center_point) < radar_[i]->R)
+		if (utility::dist(state.position, radar_[i]->center_point) <= radar_[i]->R)
 			return true;
 	}
 	return false;
@@ -92,8 +92,8 @@ float ParticleSwarm::computeUncetanty(utility::State& state,double search_r,int 
 	int i_max = min(size_y, (int)(state.position.y + search_r) / resolution);
 	int j_min = max(0, (int)(state.position.x - search_r) / resolution);
 	int j_max = min(size_x, (int)(state.position.x + search_r) / resolution);
-	for (int i = i_min; i < i_max; i++) {
-		for (int j = j_min; j < j_max; j++) {
+	for (int i = i_min; i <= i_max; i++) {
+		for (int j = j_min; j <= j_max; j++) {
 			utility::point2D grid_pose((j + 0.5)*resolution, (i + 0.5)*resolution);
 			if (dist(grid_pose, state.position) < search_r)
 				uncertance +=cunt-global_map[i][j]->search_time[id];
@@ -108,8 +108,8 @@ void ParticleSwarm::updateSubMap(utility::UAV * uav) {
 	int i_max = min(size_y, (int)(uav->state.position.y + uav->search_r) / resolution);
 	int j_min = max(0, (int)(uav->state.position.x - uav->search_r) / resolution);
 	int j_max = min(size_x, (int)(uav->state.position.x + uav->search_r) / resolution);
-	for (int i = i_min; i < i_max; i++) {
-		for (int j = j_min; j < j_max; j++) {
+	for (int i = i_min; i <= i_max; i++) {
+		for (int j = j_min; j <= j_max; j++) {
 			utility::point2D grid_pose((j + 0.5)*resolution, (i + 0.5)*resolution);
 			if (dist(grid_pose, uav->state.position) < uav->search_r)
 				global_map[i][j]->search_time[uav->id] = cunt;
@@ -125,7 +125,7 @@ void ParticleSwarm::updateSubMap(utility::UAV * uav) {
 		for (int j = j_min; j < j_max; j++) {
 			utility::point2D grid_pose((j + 0.5)*sparse_resolution, (i + 0.5)*sparse_resolution);
 			if (dist(grid_pose, uav->state.position) < sparse_resolution)
-				global_map[i][j]->search_time[uav->id] = cunt;
+				sparse_map[i][j]->search_time[uav->id] = cunt;
 		}
 	}
 	return;
@@ -269,15 +269,17 @@ utility::point2D ParticleSwarm::computeRepulsion(utility::point2D& start, utilit
 	return F_rep;
 };
 
-double ParticleSwarm::computeEnage(utility::point2D& start, utility::point2D& obstacle,double zero_dist) {
-	utility::point2D F_rep = start - obstacle;
+double ParticleSwarm::computeEnage(utility::State  & start, utility::point2D& obstacle,double zero_dist) {
+	utility::point2D F_rep = obstacle -start.position;
 
-	if (F_rep.distance() > zero_dist)
-		F_rep = F_rep * 0;
-	else if (F_rep.distance() > 0.0000001)
-		F_rep = F_rep * (1 / pow(F_rep.distance(), 3));
-	return F_rep.distance();
-
+	double theta = F_rep.angle () - start.velocity.y;
+	double res = 0;
+	theta = 1 + cos(theta);
+	if (F_rep.distance() < resolution)
+		res = theta;
+	else if (F_rep.distance() < zero_dist)
+		res = theta / (F_rep.distance() / resolution);
+	return res;
 };
 
 double ParticleSwarm::computeAttEnage(utility::State& start, utility::State& end, double zero_dist) {
@@ -287,7 +289,7 @@ double ParticleSwarm::computeAttEnage(utility::State& start, utility::State& end
 		d =  0;
 	else if (d > 0.0000001)
 		d = 1/d;
-
+	return d;
 };
 
 utility::point2D ParticleSwarm::computeAttraction(utility::point2D& start, utility::point2D& goal) {
@@ -301,7 +303,7 @@ void ParticleSwarm::spreadParticles(utility::UAV * uav) {
 
 	while (j<particle_num) {
 		utility::particle* temp_particle = uav->swarm[j];
-		double length = uav->search_r+resolution  + (uav->state.velocity.x*dt+ 1000) * (rand() % 1000) / 1000.0;
+		double length = uav->search_r+resolution  + (uav->state.velocity.x*dt) * (rand() % 1000) / 1000.0;
 		double theta = 2 * pi*((rand() % 1000) / 1000.0);
 		temp_particle->state.position.x = length * cos(theta) + uav->state.position.x;
 		temp_particle->state.position.y = length * sin(theta) + uav->state.position.y;
@@ -329,13 +331,14 @@ void ParticleSwarm::updateParticleStates(utility::UAV * uav) {//更新粒子
 	//w3 = 1/uav->calculateW3();
 	int best_x = 0, best_y = 0;
 	double best_grid_fit = 0, temp_grid_fit = 0;
-	utility::point2D best_grid(0, 0);
+	utility::point2D best_grid(0, 0);//R=v*v/g*tana
+	double min_R = pow(uav->state.velocity.x, 2) / uav->Acc_limite_y[1];
 	for (int i = 0; i<sparse_size_y; i++) {
 		for (int j = 0; j<sparse_size_x; j++) {
 			utility::State* temp = new utility::State();
 			temp->position.x = (i + 0.5)*sparse_resolution;
 			temp->position.y = (j + 0.5)*sparse_resolution;
-			temp_grid_fit = (cunt-sparse_map[i][j]->search_time[uav->id]) + (temp->position - uav->state.position).distance()/sparse_resolution;
+			temp_grid_fit = (cunt-sparse_map[i][j]->search_time[uav->id]) + 100.0/(dubinsDistance(uav->state,*temp,min_R)+100);
 			if (temp_grid_fit>best_grid_fit) {
 				best_grid_fit = temp_grid_fit;
 				best_grid.x = (j + 0.5)*sparse_resolution;
@@ -347,22 +350,33 @@ void ParticleSwarm::updateParticleStates(utility::UAV * uav) {//更新粒子
 	particle_state.open(particle_state_path, ios::app | ios::binary);
 	uav_state.open(uav_state_path, ios::app | ios::binary);
 	best_state.open(best_state_path, ios::app | ios::binary);
+
+	double r1, r2, line_X, line_Y;
+	int x, y, t;
+	double num, temp_fitness,temp_fitness_1 = 0, temp_fitness_2 = 0, temp_fitness_3 = 0, E=0;
+	utility::point2D obstacle, Radar_point;;
+	double Pij,c;
+	double angle,angle1, angle2;
+	
 	for (int i = 0; i<50; i++) {
 		for (int j = 0; j < particle_num; j++) {
 			utility::particle & temp_part = *(uav->swarm[j]);
 			//速度更新
-			double r1 = rand() % 1000 / 1000.0;
-			double r2 = rand() % 1000 / 1000.0;
-			double line_X = temp_part.state.velocity.x * cos(temp_part.state.velocity.y);//速度在XY向的分量
-			double line_Y = temp_part.state.velocity.x * sin(temp_part.state.velocity.y);
+			r1 = rand() % 1000 / 1000.0;
+			r2 = rand() % 1000 / 1000.0;
+			line_X = temp_part.state.velocity.x * cos(temp_part.state.velocity.y);//速度在XY向的分量
+			line_Y = temp_part.state.velocity.x * sin(temp_part.state.velocity.y);
 			line_X = weight * line_X + c1 * r1 *(temp_part.Pbest_state.position.x - temp_part.state.position.x) + c2 * r2 *(uav->Gbest_state.position.x - temp_part.state.position.x);
 			line_Y = weight * line_Y + c1 * r1 *(temp_part.Pbest_state.position.y - temp_part.state.position.y) + c2 * r2 *(uav->Gbest_state.position.y - temp_part.state.position.y);
 			
 			temp_part.state.velocity.x = sqrt(line_X * line_X + line_Y * line_Y);//粒子的速度更新公式
-			if (line_Y >= 0)
+			if(temp_part.state.velocity.x ==0)
+				temp_part.state.velocity.y = 0;
+			else if (line_Y >= 0)
 				temp_part.state.velocity.y = acos(line_X / temp_part.state.velocity.x);
 			else
 				temp_part.state.velocity.y = 2 * pi - acos(line_X / temp_part.state.velocity.x);
+				
 
 			//速度限制
 			if (temp_part.state.velocity.x > uav->Vel_limite[1])
@@ -390,26 +404,27 @@ void ParticleSwarm::updateParticleStates(utility::UAV * uav) {//更新粒子
 				temp_part.state.velocity.y = pi * (1 + (rand() % 1000) / 1000.0);//角度
 			}
 
+
 			//概率更新
-			int x = temp_part.state.position.x / resolution;
-			int y = temp_part.state.position.y / resolution;
+			x = temp_part.state.position.x / resolution;
+			y = temp_part.state.position.y / resolution;
 			//int t = computeUncetanty(temp_part.state,uav->search_r, uav->id);
-			int t = cunt - global_map[y][x]->search_time[uav->id];
+			t = cunt - global_map[y][x]->search_time[uav->id]-1;
 			//cout<<"size_x*size_y-uav->coverd_area_cnt="<<size_x*size_y-uav->coverd_area_cnt<<endl;
 			//cout<<"1 - exp(-tao *t )="<<1 - exp(-tao *t )<<endl;
-			double  num = (size_x*size_y - uav->coverd_area_cnt) / (double)(size_x * size_y);
+			num = (size_x*size_y - uav->coverd_area_cnt) / (double)(size_x * size_y);
 			for (int k = 0; k < target_num; k++) {
-				temp_part.p[k] = sigmod(t) / num;
+				temp_part.p[k] = (1-exp(-tao*t/forget_time))*num;
 				//cout << "num=" << num << "; temp_part.p[k] = " << temp_part.p[k] <<"  "<< 1 - exp(-tao * t) <<" ; t="<<t<< endl;
 			}
 
 			//适应值更新
 			//fitness1
-			double temp_fitness_1 = 0, temp_fitness_2 = 0, temp_fitness_3 = 0;
-
-			double E_rep;
 			//obstacle
-			utility::point2D obstacle;
+			E = 0;
+			if (!isInBound(temp_part.state))
+				E -= 1000000;
+
 			if (temp_part.state.position.x > rectangle.point_lists[2].x)
 				obstacle.x = rectangle.point_lists[2].x;
 			else if (temp_part.state.position.x < rectangle.point_lists[0].x)
@@ -423,33 +438,51 @@ void ParticleSwarm::updateParticleStates(utility::UAV * uav) {//更新粒子
 				obstacle.y = rectangle.point_lists[1].y;
 			else
 				obstacle.y = temp_part.state.position.y;
-
-			E_rep = -computeEnage(temp_part.state.position, obstacle, 10000);
+			if (isInObstacle(temp_part.state))
+				E -= 1000000;
+			else
+				E -= computeEnage(temp_part.state, obstacle, 5000);
+			
 			//compute Radar
-			utility::point2D Radar_point;
 			Radar_point = radar_[0]->center_point + (uav->state.position - radar_[0]->center_point)*(radar_[0]->R / (uav->state.position - radar_[0]->center_point).distance());
-			E_rep -= computeEnage(temp_part.state.position, Radar_point,10000);
+			if(isInRader(temp_part.state))
+				E -= 1000000;
+			else
+				E -= computeEnage(temp_part.state, Radar_point, 5000);
+
+			//uav
 			for (int uav_it = 0; uav_it < uav_num; uav_it++) {
 				if (uav_it != uav->id) {
-					E_rep -= computeEnage(temp_part.state.position, uav_[uav_it]->traj_Point.position, 10000);
+					E -= 10*computeEnage(temp_part.state, uav_[uav_it]->state.position, uav->search_r+ uav_[uav_it]->search_r);
 				}
 			}
+
+
 			//compute attration enage from uav itself
-			double min_R = uav->state.velocity.x*uav->state.velocity.x / uav->Acc_limite_y[1];
-			E_rep += uav->search_r / dubinsDistance(uav->state, temp_part.state, min_R);
+			if(dist(uav->state.position, temp_part.state.position)>uav->search_r)
+				E += computeEnage(uav->state, temp_part.state.position, 10000);
 
 			//compute attration enage from target
+			temp_fitness_1 = 0;
 			for (int target_id = 0; target_id < target_num; target_id++) {
+				
 				if (cunt - uav->target_state[target_id].second < forget_time) {//target has been spotted
-					double c = uav->Vel_limite[1] - target[target_id]->Vel_limite[1];//匹配程度
-					E_rep += 10*uav->search_r / (dubinsDistance(temp_part.state, uav->target_state[target_id].first, min_R)+c);
+					c = uav->Vel_limite[1] - target[target_id]->Vel_limite[1];//匹配程度
+					E += (computeEnage(temp_part.state, target[target_id]->state.position, 10000) * abs(500 / c))*uav->Tj[target_id];
 				}
-				double Pij = temp_part.p[target_id];
-				int Tj = uav->Tj[target_id];//目标k是否未被与之更匹配的无人机跟踪
-				temp_fitness_1 += (Pij * sigmod(E_rep))* Tj;
+			} 
+			for (int target_id = 0; target_id < target_num; target_id++) {
+				Pij = temp_part.p[target_id];
+				if (cunt - uav->target_state[target_id].second < forget_time) {
+					Pij = 1;
+				}
+				
+				temp_fitness_1 += (Pij *( 1+E))*uav->Tj[target_id];
 			}
-
+			
+			
 			//fitness2
+			temp_fitness_2 = 0;
 			if (t >= forget_time)
 				temp_fitness_2 = w * 1.0 / num;
 			else
@@ -457,18 +490,18 @@ void ParticleSwarm::updateParticleStates(utility::UAV * uav) {//更新粒子
 			//cout << "temp_fitness_1 = " << temp_fitness_1 <<";temp_fitness_2 = "<<temp_fitness_2<<endl;
 
 			//fitness3
-			double angle1 = acos((best_grid.x - uav->state.position.x) / dist(uav->state.position, best_grid));
+			angle1 = acos((best_grid.x - uav->state.position.x) / dist(uav->state.position, best_grid));
 			angle1 = (best_grid.y - uav->state.position.y)>0 ? angle1 : 2 * pi - angle1;//0~2*pi
-			double angle2 = acos((temp_part.state.position.x - uav->state.position.x) / dist(uav->state.position, temp_part.state.position));
+			angle2 = acos((temp_part.state.position.x - uav->state.position.x) / dist(uav->state.position, temp_part.state.position));
 			angle2 = (temp_part.state.position.y - uav->state.position.y)>0 ? angle2 : 2 * pi - angle2;//0~2*pi
-			double angle = abs(angle2 - angle1) < pi ? abs(angle2 - angle1) : 2 * pi - abs(angle2 - angle1);
-			temp_fitness_3 = 1 - sigmod(angle);
+			angle = abs(angle2 - angle1) < pi ? abs(angle2 - angle1) : 2 * pi - abs(angle2 - angle1);
+			temp_fitness_3 = cos(angle)/(1+dist(temp_part.state.position, best_grid));//防止dist无限小报错 +1
 			//cout << "temp_fitness_1 = " << temp_fitness_1 <<";temp_fitness_2 = "<<temp_fitness_2<< ";temp_fitness_3 = " << temp_fitness_3 << endl;
-			double temp_fitness = w1 * temp_fitness_1 + w2 * temp_fitness_2 + w3 * temp_fitness_3;//适应值
+			temp_fitness = w1 * temp_fitness_1 + w2 * temp_fitness_2 + w3 * temp_fitness_3;//适应值
 			if (isInRader(temp_part.state))
-				temp_fitness = -1;
+				temp_fitness = -10000;
 			if(isInObstacle(temp_part.state))
-				temp_fitness = -1;
+				temp_fitness = -100000;
 			if (temp_fitness >= temp_part.fitness) {//局部最优位置判断
 				temp_part.fitness = temp_fitness;
 				temp_part.Pbest_state = temp_part.state;
@@ -478,18 +511,19 @@ void ParticleSwarm::updateParticleStates(utility::UAV * uav) {//更新粒子
 													 //cout << "更新temp_fitness" << temp_fitness << " current particle" << j << endl;
 				uav->Gbest_fitness = temp_fitness;
 				uav->Gbest_state = temp_part.state;
+				//cout << "E=" << E << ";pij=" << Pij << ";temp_fitness_1=" << temp_fitness_1 << ";temp_fitness_2=" << temp_fitness_2 << ";temp_fitness_3=" << temp_fitness_3 << endl;
 			}
 			
-			if (uav->id == 3)
+			if (uav->id == 2)
 				particle_state << temp_part.state.position.x << " " << temp_part.state.position.y << " ";
 		}
-		if (uav->id == 3) {
+		if (uav->id == 2) {
 			particle_state << endl;
 			uav_state << uav->state.position.x << " " << uav->state.position.y << endl;
 			best_state << uav->Gbest_state.position.x << " " << uav->Gbest_state.position.y << endl;
 		}
 	}
-	//cout << "Gbest_fitness = " << uav->Gbest_fitness << endl;
+	//cout << "Gbest_fitness = " << uav->Gbest_fitness <<";"<< endl;
 	uav->traj_Point = uav->Gbest_state;
 	uav->updatePrevPoses();
 	return;
@@ -497,7 +531,7 @@ void ParticleSwarm::updateParticleStates(utility::UAV * uav) {//更新粒子
 
 void ParticleSwarm::init() {
 	//obstacle
-	srand((int(time(NULL))));
+	srand((int(time(0))));
 	for (int i = 0; i < radar_num; i++) {
 		utility::radar* temp_rader = new utility::radar();
 		temp_rader->center_point.x = 30000;
@@ -583,9 +617,9 @@ void ParticleSwarm::init() {
 
 
 	//map
-	for (int i = 0; i < size_y; i++) {//初始化地图，i=0代表第一行，j=0代表第一列
+	for (int i = 0; i <=size_y; i++) {//初始化地图，i=0代表第一行，j=0代表第一列
 		vector<utility::grid*> temp;
-		for (int j = 0; j < size_x; j++) {
+		for (int j = 0; j <= size_x; j++) {
 			utility::grid* tempGridPtr = new utility::grid();
 			for (int k = 0; k<uav_num; k++)
 				tempGridPtr->search_time.push_back(-forget_time);
@@ -594,7 +628,7 @@ void ParticleSwarm::init() {
 		global_map.push_back(temp);
 	}
 	//sparse_map
-	for (int i = 0; i < sparse_size_y; i++) {//初始化地图，i=0代表第一行，j=0代表第一列
+	for (int i = 0; i <sparse_size_y; i++) {//初始化地图，i=0代表第一行，j=0代表第一列
 		vector<utility::grid*> temp;
 		for (int j = 0; j < sparse_size_x; j++) {
 			utility::grid* tempGridPtr = new utility::grid();
@@ -769,6 +803,17 @@ void ParticleSwarm::updateTargetStates() {
 			target[target_tag]->state.position.y = PosMax.y;
 			target[target_tag]->state.velocity.y = pi * (1 + (rand() % 1000) / 1000.0);//角度
 		}
+
+		bool istracking = false;
+		for(auto uav_temp:uav_)
+			if (dist(uav_temp->state.position, target[target_tag]->state.position) <= 10 * resolution) {
+				istracking = true;//至少有一架无人机在追踪目标
+				break;
+			}
+		if (!istracking)//没有无人机在追踪该目标
+			for (auto uav_temp : uav_)
+				uav_temp->Tj[target_tag] = 1;
+	 
 		output_target << target[target_tag]->state.position.x << " " << target[target_tag]->state.position.y << " ";
 	}
 	output_target << endl;
@@ -814,6 +859,16 @@ void ParticleSwarm::updateUAVStates() {
 			if (dist(target[j]->state.position, uav_[i]->state.position)<uav_[i]->search_r) {
 				uav_[i]->target_state[j].first = target[j]->state;
 				uav_[i]->target_state[j].second = cunt;
+				//cout << "target" << j << " has been found by uav" << i << endl;
+				if(dist(target[j]->state.position, uav_[i]->state.position) < 5*resolution){
+					tracked[j] = true;
+					cout << "target " << j << " is successfully tracked by uav " << i << endl;
+					for (auto temp_uav : uav_)
+						if(temp_uav->id!=i)
+							temp_uav->Tj[j] = 0;
+						else
+							temp_uav->Tj[j] = 1;
+				}
 			}
 		}
 	}
@@ -856,17 +911,17 @@ void ParticleSwarm::informationShare() {
 	union_.setup_barrel();//setup barrel
 
 	//dense map
-	for (int i = 0; i<size_y; i++) {
-		for (int j = 0; j <size_x; j++) {
+	for (int i = 0; i<=size_y; i++) {
+		for (int j = 0; j <=size_x; j++) {
 			for (int k = 0; k<union_.barrel.size(); k++) {
 				float max_count = -forget_time;
-				for (int l = 0; l<union_.barrel[k].size(); l++) {
-					max_count = std::max(max_count, global_map[i][j]->search_time[union_.barrel[k][l]]);//find the lowest search time
-				}
-				for (int l = 0; l<union_.barrel[k].size(); l++) {
-					global_map[i][j]->search_time[union_.barrel[k][l]] = max_count;//set the search time
-					if (cunt-max_count<forget_time)
-						uav_[union_.barrel[k][l]]->coverd_area_cnt++;//count the coverd area
+				for (int l = 0; l < union_.barrel[k].size(); l++) {
+					max_count = std::max(max_count, global_map[i][j]->search_time[union_.barrel[k][l]]);//find the lowest search time				}
+					for (int l = 0; l < union_.barrel[k].size(); l++) {
+						global_map[i][j]->search_time[union_.barrel[k][l]] = max_count;//set the search time
+						if (cunt - max_count < forget_time)
+							uav_[union_.barrel[k][l]]->coverd_area_cnt++;//count the coverd area
+					}
 				}
 			}
 		}
